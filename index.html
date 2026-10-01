@@ -695,6 +695,8 @@ const SFX=(()=>{
       tone({f:1318,t:.09,dur:.18,vol:.08}); tone({f:1760,t:.15,dur:.22,vol:.07}); },
     collect(i){ tone({f:semi(880,Math.min(i,12)),type:'sine',dur:.14,vol:.18}); tone({f:semi(1760,Math.min(i,12)),t:.03,dur:.1,vol:.05}); },
     boost(i){ tone({f:semi(660,i*2),type:'triangle',dur:.16,vol:.16}); },
+    dealTick(i){ const k=[0,2,4,7,9][i%5]+12*Math.floor(i/5);
+      tone({f:semi(392,k),type:'triangle',dur:.09,vol:.15}); noise({dur:.03,vol:.08,freq:3200,q:1.2}); },
     win(){ [0,4,7,12,16].forEach((k,i)=>tone({f:semi(523,k),type:'triangle',t:i*.09,dur:.35,vol:.16}));
       tone({f:semi(523,24),t:.5,dur:.6,vol:.08}); },
     lose(){ [7,4,0,-5].forEach((k,i)=>tone({f:semi(392,k),type:'sine',t:i*.16,dur:.35,vol:.18})); }
@@ -750,8 +752,19 @@ function startLevel(i){
   for(let r=0;r<S.rows;r++)for(let c=0;c<S.cols;c++){S.grid[r][c]=makeTile(pickNoPair(r,c),r,c);}
   S.made=new Set(S.grid.flat().map(t=>t.v));
   if(!hasMove())reshuffle();
-  S.grid.flat().forEach((t,k)=>{if(!reducedMotion.matches)t.el.querySelector('.tile-pile').animate([{transform:'translateY(-30px) scale(.6)',opacity:0},{transform:'none',opacity:1}],{duration:260,delay:k*14,easing:'cubic-bezier(.2,.8,.3,1.2)',fill:'backwards'});});
+  // Tiles deal in as a diagonal wave from the bottom-left corner, one soft tick per diagonal.
+  const DEAL_STEP=36;
+  S.grid.flat().forEach(t=>{if(!reducedMotion.matches)t.el.querySelector('.tile-pile').animate([{transform:'translateY(-24px) scale(.6)',opacity:0},{transform:'none',opacity:1}],{duration:240,delay:(S.rows-1-t.r+t.c)*DEAL_STEP,easing:'cubic-bezier(.2,.8,.3,1.2)',fill:'backwards'});});
+  if(!reducedMotion.matches)playDeal(S.rows+S.cols-1,DEAL_STEP);
   updateHUD();overlay.classList.remove('show');
+}
+// One tile click per diagonal, pitched up as the wave travels; synth tick until the recording has loaded.
+function playDeal(n,step){
+  const state=S;
+  let useRec=null; // decided on the first tick so one wave never mixes the two sounds
+  for(let i=0;i<n;i++)setTimeout(()=>{if(S!==state)return;
+    if(useRec!==false){const ok=TILE_SFX.play(0,.8,1.1+i*.05,.09);if(useRec===null)useRec=ok;if(ok)return;}
+    SFX.dealTick(i);},40+i*step);
 }
 function pickSpawn(){const s=S.L.start,w=s.map((v,i)=>v===themeOf(v)[0]?1:.4),tot=w.reduce((a,b)=>a+b);let x=Math.random()*tot;for(let i=0;i<s.length;i++){if((x-=w[i])<=0)return s[i];}return s[0];}
 function layout(){
@@ -1076,6 +1089,7 @@ function showAdEnd(win){
   overlay.classList.add('show');
 }
 overlay.addEventListener('click',e=>{const act=e.target.closest('[data-act]')?.dataset.act;if(!act)return;SFX.ui();
+  if(act==='start')startLevel(0);
   if(act==='next')startLevel(levelIndex<LEVELS.length-1?levelIndex+1:0);if(act==='retry')startLevel(levelIndex);});
 document.getElementById('chain').addEventListener('click',e=>{const b=e.target.closest('[data-family]');if(b){activeFamily=Number(b.dataset.family);updateHUD(false);}});
 document.getElementById('restartBtn').onclick=()=>startLevel(levelIndex);
@@ -1085,7 +1099,9 @@ document.getElementById('soundBtn').onclick=()=>{SFX.toggle();renderSound();};re
 window.addEventListener('pointerdown',e=>{if(e.isTrusted)SFX.unlock();},{capture:true});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)SFX.pause();else SFX.resume();});
 window.addEventListener('pagehide',()=>SFX.pause());
-startLevel(0);
+// Start screen: the first tap unlocks audio, so level 1's deal-in plays with sound.
+document.getElementById('card').innerHTML=`<div class="ad-end"><div class="end-kicker">LEVEL 1 / ${LEVELS.length}</div><h2>Tile Merge</h2><button class="btn" data-act="start">Play</button></div>`;
+overlay.classList.add('show');
 
 </script>
 </body>
